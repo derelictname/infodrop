@@ -20,15 +20,15 @@ global(localHostname="example.com")
 
 # Отдельный набор правил обработки с отдельной очередью
 ruleset(name="send") {
-        action(
-                type="omfwd"
-                target="11.22.33.44"
-                port="514"
-                protocol="tcp"
-                queue.filename="forwarding"
-                queue.size="1000000"
-                queue.type="LinkedList"
-        )
+    action(
+        type="omfwd"
+        target="11.22.33.44"
+        port="514"
+        protocol="tcp"
+        queue.filename="forwarding"
+        queue.size="1000000"
+        queue.type="linkedlist"
+    )
 }
 
 # Определяем фильтр и вызываем набор правил
@@ -45,29 +45,29 @@ module(load="imtcp")
 input(type="imtcp" port="514" ruleset="save")
 
 # Шаблон имени файла
-template(name="remote" type="list") {
-        constant(value="/var/log/rsyslog/")
-        property(name="hostname")
-        constant(value="/")
-        property(name="timegenerated" dateFormat="year")
-        constant(value="-")
-        property(name="timegenerated" dateFormat="month")
-        constant(value="-")
-        property(name="timegenerated" dateFormat="day")
-        constant(value="/")
-        property(name="programname")
-        constant(value=".log")
+template(name="filename" type="list") {
+    constant(value="/var/log/rsyslog/")
+    property(name="hostname")
+    constant(value="/")
+    property(name="timegenerated" dateFormat="year")
+    constant(value="-")
+    property(name="timegenerated" dateFormat="month")
+    constant(value="-")
+    property(name="timegenerated" dateFormat="day")
+    constant(value="/")
+    property(name="programname")
+    constant(value=".log")
 }
 
 # Шаблон сообщения
 template(name="message" type="list") {
-        property(name="msg" position.from="2")
-        constant(value="\n")
+    property(name="msg" position.from="2")
+    constant(value="\n")
 }
 
 # Набор правил обработки
 ruleset(name="save") {
-        action(type="omfile" dynaFile="remote" template="message")
+    action(type="omfile" dynaFile="filename" template="message")
 }
 ```
 
@@ -75,40 +75,95 @@ ruleset(name="save") {
 
     logger test1
 
-- [Шаблоны](https://www.rsyslog.com/doc/v8-stable/configuration/templates.html)
-- [Фильтры](https://www.rsyslog.com/doc/v8-stable/configuration/filters.html)
-- [Очереди](https://www.rsyslog.com/doc/v8-stable/concepts/queues.html)
+- [Шаблоны](https://www.rsyslog.com/doc/master/configuration/templates.html)
+- [Фильтры](https://www.rsyslog.com/doc/master/configuration/filters.html)
+- [Очереди](https://www.rsyslog.com/doc/master/rainerscript/queue_parameters.html)
 - [Шифрование](https://www.rsyslog.com/doc/master/tutorials/tls.html)
 
-## Старый синтаксис настроек
+## TLS
 
-Отправка логов
+    apt install rsyslog-gnutls
+
+
+## Elasticsearch и Kibana
+
+Добавляем поддержку Elasticsearch в Rsyslog
+
+    apt install rsyslog-elasticsearch
+
+Docker Compose
+
+```yaml
+services:
+
+  elasticsearch:
+    image: elasticsearch:8.8.1
+    ports:
+      - 9200:9200
+    volumes:
+      - elastic:/usr/share/elasticsearch/data
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: false
+
+  kibana:
+    image: kibana:8.8.1
+    ports:
+      - 5601:5601
+
+volumes:
+  elastic:
+```
+
+Шаблон сообщения в Rsyslog
 
 ```
-# Отправка на удалённый сервер по UDP
-*.* @11.22.33.44:514
-
-# Отправка на удалённый сервер по TCP
-*.* @@11.22.33.44:514
-
-# Отправка определённого facility и level
-local0.error @11.22.33.44:514
+template(name="elasticsearch-message" type="list" option.json="on") {
+    constant(value="{")
+    constant(value="\"timestamp\":\"")    property(name="timereported" dateFormat="rfc3339")
+    constant(value="\",\"message\":\"")   property(name="msg")
+    constant(value="\",\"host\":\"")      property(name="hostname")
+    constant(value="\",\"severity\":\"")  property(name="syslogseverity-text")
+    constant(value="\",\"facility\":\"")  property(name="syslogfacility-text")
+    constant(value="\",\"syslogtag\":\"") property(name="syslogtag")
+    constant(value="\"}")
+}
 ```
 
-Получение логов
+Шаблон индекса в Rsyslog
 
 ```
-# Шаблон имени файла с сообщениями
-$template RemoteLogs,"/var/log/rsyslog/%HOSTNAME%/%programname%.log"
-
-# Фильтр сообщений, полученных по UDP, и назначение шаблона
-:inputname, isequal, "imudp" ?RemoteLogs
-
-# Прекращение обработки, чтобы не сообщение не ушло в локальные логи
-& ~
+template(name="elasticsearch-index" type="list") {
+    constant(value="syslog-")
+    property(name="timereported" dateFormat="rfc3339" position.from="1" position.to="4")
+    constant(value=".")
+    property(name="timereported" dateFormat="rfc3339" position.from="6" position.to="7")
+    constant(value=".")
+    property(name="timereported" dateFormat="rfc3339" position.from="9" position.to="10")
+}
 ```
 
-## Хранение и поиск в manticoresearch
+Отправка в Elasticsearch
+
+```
+ruleset(name="save") {
+    action(
+        type="omelasticsearch"
+        template="elasticsearch-message"
+        searchIndex="elasticsearch-index"
+        searchType="_doc"  # Стандартный тип в Elasticsearch 8
+        dynSearchIndex="on"
+        queue.type="linkedlist"
+        queue.size="5000"
+    )
+}
+```
+
+## Manticoresearch и Grafana
+
+Добавляем поддержку MySQL в Rsyslog
+
+    apt install rsyslog-mysql
 
 Docker Compose
 
@@ -130,17 +185,16 @@ services:
     volumes:
       - grafana:/var/lib/grafana
 
-
 volumes:
   manticore:
   grafana:
 ```
 
-Подключаемся к manticoresearch
+Ручное подключение к Manticoresearch
 
     mysql -P 9306
 
-Создаёт таблицу в manticoresearch
+Пример таблицы в Manticoresearch
 
 ```sql
 CREATE TABLE systemevents
@@ -169,10 +223,10 @@ CREATE TABLE systemevents
     eventlogtype string,
     genericfilename string,
     systemid int
-);
+) engine='columnar';
 ```
 
-Шаблон SQL сообщения в rsyslog для отправки в manticoresearch
+Шаблон для Rsyslog
 
 ```
 template(name="sql" type="list" option.sql="on") {
@@ -197,7 +251,7 @@ template(name="sql" type="list" option.sql="on") {
 }
 ```
 
-Перенаправление сообщений в manticoresearch
+Перенаправление сообщений на сервере в Manticoresearch
 
 ```
 module(load="imtcp")
@@ -205,18 +259,28 @@ input(type="imtcp" port="514" ruleset="save")
 
 module (load="ommysql")
 ruleset(name="save") {
-    action(type="ommysql" server="127.0.0.1" db="Manticore" serverport="9306" uid="root" pwd="" template="sql")
+    action(
+        type="ommysql"
+        server="127.0.0.1"
+        db="Manticore"
+        serverport="9306"
+        uid="root"
+        pwd=""
+        template="sql"
+        queue.type="linkedlist"
+        queue.size="5000"
+    )
 }
 ```
 
-Подключаем в Grafana источник MySQL и создаём панель (Timeseries и/или Logs) с SQL запросом
+Пример SQL запроса через Grafana
 
 ```sql
 SELECT
   $__unixEpochGroup(devicereportedtime, $__interval) AS time,
   CONCAT(fromhost, ' ', syslogtag) AS metric,
   message,
-  priority
+  priority AS value
 FROM
   Manticore.systemevents
 WHERE
@@ -227,15 +291,40 @@ GROUP BY
 ORDER BY
   priority ASC
 ORDER BY
-  time DESC
+  time ASC
 LIMIT
   1000
 ```
-
-В дашборде добавляем переменную search для поиска по логам.
 
 Ссылки
 
 - <https://manticoresearch.com/blog/manticoresearch-grafana-integration/>
 - <https://grafana.com/docs/grafana/latest/datasources/mysql/>
 
+## Старый синтаксис
+
+Отправка логов
+
+```
+# Отправка на удалённый сервер по UDP
+*.* @11.22.33.44:514
+
+# Отправка на удалённый сервер по TCP
+*.* @@11.22.33.44:514
+
+# Отправка определённого facility и level
+local0.error @11.22.33.44:514
+```
+
+Получение логов
+
+```
+# Шаблон имени файла с сообщениями
+$template RemoteLogs,"/var/log/rsyslog/%HOSTNAME%/%programname%.log"
+
+# Фильтр сообщений, полученных по UDP, и назначение шаблона
+:inputname, isequal, "imudp" ?RemoteLogs
+
+# Прекращение обработки, чтобы не сообщение не ушло в локальные логи
+& ~
+```
