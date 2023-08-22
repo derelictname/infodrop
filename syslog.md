@@ -151,13 +151,20 @@ ruleset(name="save") {
         type="omelasticsearch"
         template="elasticsearch-message"
         searchIndex="elasticsearch-index"
-        searchType="_doc"  # Стандартный тип в Elasticsearch 8
+        searchType=""
         dynSearchIndex="on"
+        bulkmode="on"
         queue.type="linkedlist"
         queue.size="5000"
+        queue.dequeuebatchsize="300"
+        action.resumeretrycount="-1"
     )
 }
 ```
+
+## Loki и Grafana
+
+https://grafana.com/docs/loki/latest/api/#push-log-entries-to-loki
 
 ## Manticoresearch и Grafana
 
