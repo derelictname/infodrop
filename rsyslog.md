@@ -1,14 +1,16 @@
 # rsyslog
 
-Маршрутизатор, фильтр и обработчик сообщений по стандарту syslog. Основной источник сообщений - сокет (`nc -u -U /dev/log`), а назначение - файлы, но также можно отправлять и получать сообщения по сети, по разным протоколам (в том числе в базы данных, RESTful API и т.д.).
+Маршрутизатор, фильтр и обработчик сообщений по стандарту syslog. Основной источник сообщений - сокет (`nc -u -U /dev/log`), а назначение - файлы, но также можно отправлять и получать сообщения по сети, по разным протоколам ([полный список](https://www.rsyslog.com/doc/v8-stable/configuration/modules/idx_output.html)).
 
-https://www.rsyslog.com/newbie-guide-to-rsyslog/
+<https://www.rsyslog.com/newbie-guide-to-rsyslog/>
+
+<https://access.redhat.com/documentation/ru-ru/red_hat_enterprise_linux/6/html/deployment_guide/ch-viewing_and_managing_log_files>
 
 В Debian 12 убран rsyslog в пользу systemd-journald. The potential for corruption of the binary format has led to much heated debate.
 
 ---
 
-https://rainer.gerhards.net/2008/04/on-unreliability-of-plain-tcp-syslog.html
+<https://rainer.gerhards.net/2008/04/on-unreliability-of-plain-tcp-syslog.html>
 
 Если при отправке по TCP удалённый получатель внезапно станет недоступен (падение, обрыв связи), то ответный TCP ACK прийдёт только после восстановления доступа. До восстановления доступа TCP send() будет сохранять сообщения в буфер, в который может поместиться до 1600 сообщений. При этом отправитель не знает о том, были ли получены сообщения и когда. Поэтому TCP подходит при коротких проблемах.
 
@@ -94,7 +96,7 @@ ruleset(name="save") {
 
     apt install rsyslog-gnutls
 
-https://www.rsyslog.com/doc/master/tutorials/tls.html
+<https://www.rsyslog.com/doc/master/tutorials/tls.html>
 
 ## Elasticsearch и Kibana
 
@@ -243,7 +245,6 @@ ruleset(name="save") {
 services:
   manticore:
     image: manticoresearch/manticore
-    restart: always
     ports:
       - 127.0.0.1:9306:9306
     volumes:
@@ -251,7 +252,6 @@ services:
 
   grafana:
     image: grafana/grafana-oss
-    restart: always
     ports:
       - 3000:3000
     volumes:
@@ -261,6 +261,8 @@ volumes:
   manticore:
   grafana:
 ```
+
+В Manticore можно настроить дополнительный порт только для чтения.
 
 Подключается к Manticoresearch
 
@@ -307,7 +309,7 @@ template(name="ms-record-template" type="list" option.sql="on") {
 module(load="imtcp")
 input(type="imtcp" port="514" ruleset="save")
 
-module (load="ommysql")
+module(load="ommysql")
 ruleset(name="save") {
     action(
         type="ommysql"
@@ -333,7 +335,7 @@ SELECT
   COUNT(*) AS value,
   $breakdown AS label
 FROM
-  Manticore.systemevents
+  systemevents
 WHERE
   $__unixEpochFilter(time)
   AND syslogtag IN ($syslogtag)
@@ -349,11 +351,13 @@ LIMIT
   400
 ```
 
-Создать переменные `syslogtag`, `severity` `host` и `breakdown` с типом Query и указать запрос для получения их значений
+Создать Query переменные `syslogtag`, `severity` и `host` с запросом для значений
 
     SELECT groupby() FROM Manticore.systemevents GROUP BY syslogtag
 
-Создать переменную `search` с типом Custom.
+Создать Custom переменную `search`.
+
+Создать Custom переменную `breakdown` со значением `host, syslogtag, severity`.
 
 Прочая информация
 
