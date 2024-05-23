@@ -188,7 +188,7 @@ branch - это ссылка, под которой понимают ветку 
 
 ## merge
 
-*Make us Whole*
+_Make us Whole_
 
 Объединение разных веток в одну сопряжено с некоторым условием - содержимое их последних commit различается и требует ручного вмешательства для просмотра разницы и объединения различий. Но такая операция делается часто, так как ветвление очень удобно.
 
@@ -339,4 +339,3 @@ https://docs.github.com/ru/authentication/keeping-your-account-and-data-secure/r
 
     pipx install git-filter-repo
     git-filter-repo --invert-paths --path 'passwords.txt'
-
